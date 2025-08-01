@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+
 // 🔥 CONFIGURACIÓN DE FIREBASE
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot, setDoc, doc } from "firebase/firestore";
@@ -35,39 +36,32 @@ const App = () => {
   const [customLabels, setCustomLabels] = useState({ platforms: [], contentTypes: [] });
   const [labelNames, setLabelNames] = useState({ platforms: "Platforms", contentTypes: "Content" });
 
-  // Initialize with default calendar if none exists
- useEffect(() => {
-  const unsubscribe = onSnapshot(calendarsRef, (snapshot) => {
-    const data = snapshot.docs.map(doc => doc.data());
-    if (data.length > 0) {
-      setCalendars(data);
-      setActiveCalendar(data[0]);
-    } else {
-      const defaultCalendar = createDefaultCalendar("Default Calendar");
-      setCalendars([defaultCalendar]);
-      setActiveCalendar(defaultCalendar);
-      setDoc(doc(db, "calendars", defaultCalendar.id.toString()), defaultCalendar);
-    }
-  });
-
-  return () => unsubscribe();
-}, []);
-
-  // Save calendars and labels to localStorage whenever they change
- useEffect(() => {
-  if (calendars.length > 0) {
-    calendars.forEach(cal => {
-      setDoc(doc(db, "calendars", cal.id.toString()), cal);
+  // Cargar datos de Firebase
+  useEffect(() => {
+    const unsubscribe = onSnapshot(calendarsRef, (snapshot) => {
+      const data = snapshot.docs.map(doc => doc.data());
+      if (data.length > 0) {
+        setCalendars(data);
+        setActiveCalendar(data[0]);
+      } else {
+        const defaultCalendar = createDefaultCalendar("Default Calendar");
+        setCalendars([defaultCalendar]);
+        setActiveCalendar(defaultCalendar);
+        setDoc(doc(db, "calendars", defaultCalendar.id.toString()), defaultCalendar);
+      }
     });
-  }
-}, [calendars]);
 
-useEffect(() => {
-  if (customLabels) {
-    // Si quieres guardar customLabels en Firebase, crea otra colección
-    // Por ahora, solo guardamos los calendarios
-  }
-}, [customLabels, labelNames]);
+    return () => unsubscribe();
+  }, []);
+
+  // Guardar calendarios en Firebase
+  useEffect(() => {
+    if (calendars.length > 0) {
+      calendars.forEach(cal => {
+        setDoc(doc(db, "calendars", cal.id.toString()), cal);
+      });
+    }
+  }, [calendars]);
 
   const createDefaultCalendar = (name) => {
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -111,15 +105,12 @@ useEffect(() => {
   };
 
   const handleDeleteCalendar = (calendarId) => {
-    if (calendars.length <= 1) return; // Prevent deleting last calendar
-    
+    if (calendars.length <= 1) return;
     const updatedCalendars = calendars.filter(cal => cal.id !== calendarId);
     setCalendars(updatedCalendars);
-    
     if (activeCalendar.id === calendarId) {
       setActiveCalendar(updatedCalendars[0]);
     }
-    
     setShowDeleteCalendarConfirm(null);
   };
 
@@ -129,7 +120,6 @@ useEffect(() => {
       updatedCalendar.activities[activityIndex].tasks[dayIndex][field] = "";
     }
     updatedCalendar.activities[activityIndex].tasks[dayIndex][field] = value;
-    
     setCalendars(prev => prev.map(cal => 
       cal.id === activeCalendar.id ? updatedCalendar : cal
     ));
@@ -139,20 +129,15 @@ useEffect(() => {
   const handleEditLabels = (activityIndex, dayIndex, labelType, label) => {
     const updatedCalendar = { ...activeCalendar };
     const task = updatedCalendar.activities[activityIndex].tasks[dayIndex];
-    
-    // Initialize array if it doesn't exist
     if (!task[labelType]) {
       task[labelType] = [];
     }
-    
     const labelIndex = task[labelType].indexOf(label);
-    
     if (labelIndex === -1) {
       task[labelType].push(label);
     } else {
       task[labelType].splice(labelIndex, 1);
     }
-    
     setCalendars(prev => prev.map(cal => 
       cal.id === activeCalendar.id ? updatedCalendar : cal
     ));
@@ -163,7 +148,6 @@ useEffect(() => {
     const updatedCalendar = { ...activeCalendar };
     updatedCalendar.timeWindows[activityIndex] = timeValue;
     updatedCalendar.activities[activityIndex].timeWindow = timeValue;
-    
     setCalendars(prev => prev.map(cal => 
       cal.id === activeCalendar.id ? updatedCalendar : cal
     ));
@@ -221,7 +205,6 @@ useEffect(() => {
         contentTypes: []
       }))
     });
-    
     setCalendars(prev => prev.map(cal => 
       cal.id === activeCalendar.id ? updatedCalendar : cal
     ));
@@ -229,24 +212,20 @@ useEffect(() => {
   };
 
   const deleteTimeSlot = (activityIndex) => {
-    if (activeCalendar.timeWindows.length <= 1) return; // Prevent deleting last time slot
-    
+    if (activeCalendar.timeWindows.length <= 1) return;
     const updatedCalendar = { ...activeCalendar };
     updatedCalendar.timeWindows.splice(activityIndex, 1);
     updatedCalendar.activities.splice(activityIndex, 1);
-    
     setCalendars(prev => prev.map(cal => 
       cal.id === activeCalendar.id ? updatedCalendar : cal
     ));
     setActiveCalendar(updatedCalendar);
-    
     setShowDeleteTimeSlotConfirm(null);
   };
 
   const clearAllData = () => {
     const updatedCalendar = { ...activeCalendar };
-    // Clear all task data and time slots
-    updatedCalendar.timeWindows = ["12:30 to 13:00"]; // Reset to default time slot
+    updatedCalendar.timeWindows = ["12:30 to 13:00"];
     updatedCalendar.activities = [{
       timeWindow: "12:30 to 13:00",
       tasks: updatedCalendar.days.map(day => ({
@@ -258,7 +237,6 @@ useEffect(() => {
         contentTypes: []
       }))
     }];
-    
     setCalendars(prev => prev.map(cal => 
       cal.id === activeCalendar.id ? updatedCalendar : cal
     ));
