@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Marketing Calendar</title>
+  <!-- Librerías necesarias -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body, html {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #1a1a1a;
+      color: white;
+    }
+    #root {
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // 🔥 TU CONFIG DE FIREBASE
+    const firebaseConfig = {
+      apiKey: "AIzaSyDDbdGShwSdidFWMd__mISqiX7Y8BCcVdA",
+      authDomain: "marketing-calendar-f126f.firebaseapp.com",
+      projectId: "marketing-calendar-f126f",
+      storageBucket: "marketing-calendar-f126f.firebasestorage.app",
+      messagingSenderId: "199471456003",
+      appId: "1:199471456003:web:747296324223c771add336"
+    };
+
+    // Inicializa Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const calendarsRef = db.collection("calendars");
+
+    const { useState, useEffect } = React;
+
+    const App = () => {
+      const [calendars, setCalendars] = useState([]);
+      const [activeCalendar, setActiveCalendar] = useState(null);
+      const [editingCell, setEditingCell] = useState(null);
+      const [editValue, setEditValue] = useState("");
+      const [editingTime, setEditingTime] = useState(null);
+      const [timeValue, setTimeValue] = useState("");
+
+      // Cargar calendarios de Firebase
+      useEffect(() => {
+        const unsubscribe = calendarsRef.onSnapshot(snapshot => {
+          const data = snapshot.docs.map(doc => doc.data());
+          if (data.length > 0) {
+            setCalendars(data);
+            setActiveCalendar(data[0]);
+          } else {
+            const defaultCalendar = createDefaultCalendar("Calendario Principal");
+            setCalendars([defaultCalendar]);
+            setActiveCalendar(defaultCalendar);
+            calendarsRef.doc(defaultCalendar.id.toString()).set(defaultCalendar);
+          }
+        });
+
+        return () => unsubscribe();
+      }, []);
+
+      // Guardar cambios en Firebase
+      useEffect(() => {
+        if (calendars.length > 0) {
+          calendars.forEach(cal => {
+            calendarsRef.doc(cal.id.toString()).set(cal);
+          });
+        }
+      }, [calendars]);
+
+      const createDefaultCalendar = (name) => {
+        const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        const timeWindows = [
+          "12:30 to 13:00",
+          "14:30 to 15:00", 
+          "15:00 to 15:30",
+          "16:00 to 16:30",
+          "16:30 to 17:00",
+          "18:00 to 18:30",
+          "18:30 to 19:00"
+        ];
+
+        return {
+          id: Date.now(),
+          name,
+          days: [...days],
+          timeWindows: [...timeWindows],
+          labelNames: {
+            platforms: "Platforms",
+            contentTypes: "Content"
+          },
+          activities: timeWindows.map(timeWindow => ({
+            timeWindow,
+            tasks: days.map(day => ({
+              day,
+              task: "",
+              subtask: "",
+              details: "",
+              platforms: [],
+              contentTypes: []
+            }))
+          }))
+        };
+      };
+
+      const handleEditCell = (activityIndex, dayIndex, field, value) => {
+        const updatedCalendar = { ...activeCalendar };
+        updatedCalendar.activities[activityIndex].tasks[dayIndex][field] = value;
+        setCalendars(prev => prev.map(cal => cal.id === activeCalendar.id ? updatedCalendar : cal));
+        setActiveCalendar(updatedCalendar);
+      };
+
+      const handleEditLabels = (activityIndex, dayIndex, labelType, label) => {
+        const updatedCalendar = { ...activeCalendar };
+        const task = updatedCalendar.activities[activityIndex].tasks[dayIndex];
+        const list = task[labelType] || [];
+        const index = list.indexOf(label);
+        if (index === -1) {
+          task[labelType] = [...list, label];
+        } else {
+          task[labelType] = list.filter(l => l !== label);
+        }
+        setCalendars(prev => prev.map(cal => cal.id === activeCalendar.id ? updatedCalendar : cal));
+        setActiveCalendar(updatedCalendar);
+      };
+
+      const handleEditTime = (activityIndex, value) => {
+        const updatedCalendar = { ...activeCalendar };
+        updatedCalendar.timeWindows[activityIndex] = value;
+        updatedCalendar.activities[activityIndex].timeWindow = value;
+        setCalendars(prev => prev.map(cal => cal.id === activeCalendar.id ? updatedCalendar : cal));
+        setActiveCalendar(updatedCalendar);
+      };
+
+      const startEditing = (activityIndex, dayIndex, field, currentValue) => {
+        setEditingCell({ activityIndex, dayIndex, field });
+        setEditValue(currentValue || "");
+      };
+
+      const startEditingTime = (activityIndex, timeValue) => {
+        setEditingTime(activityIndex);
+        setTimeValue(timeValue || "");
+      };
+
+      const saveEdit = () => {
+        if (editingCell && editValue !== "") {
+          handleEditCell(editingCell.activityIndex, editingCell.dayIndex, editingCell.field, editValue);
+          setEditingCell(null);
+          setEditValue("");
+        }
+      };
+
+      const saveTimeEdit = () => {
+        if (editingTime !== null && timeValue.trim() !== "") {
+          handleEditTime(editingTime, timeValue.trim());
+          setEditingTime(null);
+          setTimeValue("");
+        }
+      };
+
+      const cancelEdit = () => {
+        setEditingCell(null);
+        setEditValue("");
+      };
+
+      const cancelTimeEdit = () => {
+        setEditingTime(null);
+        setTimeValue("");
+      };
+
+      const renderCellContent = (task, activityIndex, dayIndex, field) => {
+        const isEditing = editingCell?.activityIndex === activityIndex && 
+                          editingCell?.dayIndex === dayIndex && 
+                          editingCell?.field === field;
+
+        if (isEditing) {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <textarea
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                autoFocus
+                style={{
+                  flex: 1,
+                  padding: '4px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  resize: 'none',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  color: 'black'
+                }}
+              />
+              <div style={{ display: 'flex', gap: '4px', paddingTop: '4px' }}>
+                <button
+                  onClick={saveEdit}
+                  style={{
+                    backgroundColor: '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Guardar
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  style={{
+                    backgroundColor: '#666',
+                    color: 'white',
+                    border: 'none',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        const content = task[field] || "";
+        if (!content) {
+          return (
+            <button
+              onClick={() => startEditing(activityIndex, dayIndex, field, "")}
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#aaa',
+                fontSize: '14px',
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              +
+            </button>
+          );
+        }
+
+        return (
+          <div
+            onClick={() => startEditing(activityIndex, dayIndex, field, content)}
+            style={{ cursor: 'pointer', padding: '4px', minHeight: '20px', height: '100%' }}
+          >
+            <span style={{ fontSize: '14px' }}>{content}</span>
+          </div>
+        );
+      };
+
+      const renderTimeContent = (time, activityIndex) => {
+        const isEditing = editingTime === activityIndex;
+
+        if (isEditing) {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <input
+                type="text"
+                value={timeValue}
+                onChange={(e) => setTimeValue(e.target.value)}
+                autoFocus
+                placeholder="12:30 to 13:00"
+                style={{
+                  padding: '4px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  color: 'black'
+                }}
+              />
+              <div style={{ display: 'flex', gap: '4px', paddingTop: '4px' }}>
+                <button
+                  onClick={saveTimeEdit}
+                  style={{
+                    backgroundColor: '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Guardar
+                </button>
+                <button
+                  onClick={cancelTimeEdit}
+                  style={{
+                    backgroundColor: '#666',
+                    color: 'white',
+                    border: 'none',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div
+            onClick={() => startEditingTime(activityIndex, time)}
+            style={{ cursor: 'pointer', padding: '8px', minHeight: '20px' }}
+          >
+            <span style={{ fontSize: '14px' }}>{time}</span>
+          </div>
+        );
+      };
+
+      const renderLabels = (task, activityIndex, dayIndex, labelType, labelName) => {
+        const taskLabels = task[labelType] || [];
+        return (
+          <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #eee' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', marginRight: '8px' }}>
+                {labelName}:
+              </span>
+              <button
+                onClick={() => {
+                  const newLabel = prompt(`Nuevo ${labelName.toLowerCase()}:`);
+                  if (newLabel) {
+                    handleEditLabels(activityIndex, dayIndex, labelType, newLabel);
+                  }
+                }}
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: '#eee',
+                  color: '#333',
+                  border: 'none',
+                  padding: '2px 6px',
+                  borderRadius: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                +
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+              {taskLabels.map(label => (
+                <button
+                  key={label}
+                  onClick={() => handleEditLabels(activityIndex, dayIndex, labelType, label)}
+                  style={{
+                    fontSize: '10px',
+                    backgroundColor: '#2196F3',
+                    color: 'white',
+                    border: 'none',
+                    padding: '2px 6px',
+                    borderRadius: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      };
+
+      if (!activeCalendar) return <p>Cargando...</p>;
+
+      return (
+        <div style={{ minHeight: '100vh', backgroundColor: '#1a1a1a', color: 'white' }}>
+          {/* Header */}
+          <div style={{
+            background: 'linear-gradient(to right, #4f46e5, #7c3aed)',
+            padding: '24px',
+            textAlign: 'center'
+          }}>
+            <h1 style={{ fontSize: '2.5rem', margin: '0 0 8px 0' }}>Marketing Calendar</h1>
+            <p>Todos ven lo mismo en tiempo real</p>
+          </div>
+
+          <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+            <h2 style={{ fontSize: '1.8rem', color: 'white', marginBottom: '16px' }}>
+              {activeCalendar.name}
+            </h2>
+
+            {/* Tabla */}
+            <div style={{ backgroundColor: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={{
+                        background: 'linear-gradient(to bottom, #1e1e1e, #2d2d2d)',
+                        color: 'white',
+                        textAlign: 'left',
+                        padding: '12px',
+                        minWidth: '200px'
+                      }}>
+                        Time Window
+                      </th>
+                      {activeCalendar.days.map(day => (
+                        <th key={day} style={{
+                          background: 'linear-gradient(to bottom, #3730a3, #4f46e5)',
+                          color: 'white',
+                          padding: '12px',
+                          textAlign: 'center'
+                        }}>
+                          {day}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeCalendar.activities.map((activity, activityIndex) => (
+                      <tr key={activity.timeWindow}>
+                        <td style={{
+                          backgroundColor: '#f8f9fa',
+                          padding: '12px',
+                          borderRight: '1px solid #dee2e6',
+                          verticalAlign: 'top'
+                        }}>
+                          {renderTimeContent(activity.timeWindow, activityIndex)}
+                        </td>
+                        {activity.tasks.map((task, dayIndex) => (
+                          <td key={`${activityIndex}-${dayIndex}`} style={{
+                            padding: '8px',
+                            borderLeft: '1px solid #dee2e6',
+                            verticalAlign: 'top'
+                          }}>
+                            <div style={{
+                              backgroundColor: '#f8f9fa',
+                              borderRadius: '8px',
+                              padding: '8px',
+                              minHeight: '80px'
+                            }}>
+                              {task.task && (
+                                <div style={{ display: 'flex', alignItems: 'start', marginBottom: '4px' }}>
+                                  <span style={{
+                                    backgroundColor: '#6a0dad',
+                                    color: 'white',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    fontSize: '10px',
+                                    fontWeight: 'bold',
+                                    marginRight: '8px'
+                                  }}>
+                                    |
+                                  </span>
+                                  <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#333' }}>
+                                    {renderCellContent(task, activityIndex, dayIndex, 'task')}
+                                  </div>
+                                </div>
+                              )}
+                              {!task.task && (
+                                <div>
+                                  {renderCellContent(task, activityIndex, dayIndex, 'task')}
+                                </div>
+                              )}
+                              
+                              {task.subtask && (
+                                <div style={{ display: 'flex', alignItems: 'start', marginBottom: '4px', marginLeft: '20px' }}>
+                                  <span style={{
+                                    backgroundColor: '#16a34a',
+                                    color: 'white',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    fontSize: '10px',
+                                    fontWeight: 'bold',
+                                    marginRight: '8px'
+                                  }}>
+                                    |
+                                  </span>
+                                  <div style={{ fontSize: '14px', color: '#555' }}>
+                                    {renderCellContent(task, activityIndex, dayIndex, 'subtask')}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {task.details && (
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #eee' }}>
+                                  {renderCellContent(task, activityIndex, dayIndex, 'details')}
+                                </div>
+                              )}
+
+                              {renderLabels(task, activityIndex, dayIndex, 'platforms', 'Platforms')}
+                              {renderLabels(task, activityIndex, dayIndex, 'contentTypes', 'Content')}
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(<App />);
+  </script>
+</body>
+</html>
